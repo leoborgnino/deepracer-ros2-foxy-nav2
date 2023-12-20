@@ -52,10 +52,10 @@ def generate_launch_description():
         ),
         # start localization (amcl) and map_server
         IncludeLaunchDescription(
-            PythonLaunchDescriptionSource([nav2_bringup_dir, '/launch/localization_launch.py']),
+           PythonLaunchDescriptionSource([nav2_bringup_dir, '/launch/localization_launch.py']),
             launch_arguments={'map': map_cfg,
                               'params_file': params_cfg}.items()),
-    ])
+        ])
 
     ld = LaunchDescription()
     ld.add_action(declare_world_arg)

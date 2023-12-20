@@ -47,12 +47,12 @@ class ActionValues():
        the possible actions that can be sent to servo, pertaining to
        the angle and throttle.
     """
-    MIN_THROTTLE_OUTPUT = 0.5
-    MID_THROTTLE_OUTPUT = 0.8
-    MAX_THROTTLE_OUTPUT = 1.0
+    MIN_THROTTLE_OUTPUT = 0.05
+    MID_THROTTLE_OUTPUT = 0.2
+    MAX_THROTTLE_OUTPUT = 0.6
     MAX_STEERING_OUTPUT = 1.0
     MID_STEERING_OUTPUT = 0.5
-    MIN_STEERING_OUTPUT = 0.2
+    MIN_STEERING_OUTPUT = 0.1
     DEFAULT_OUTPUT = 0.0
 
 # Max speed percentage on a scale between 0.0 and 1.0.
@@ -64,7 +64,7 @@ class ActionValues():
 # map the speed values. The idea behind this mapping is a lower percentage of maximum speed %
 # should map to a higher speed scale value while calculating the coefficients so that the curve
 # is more flatter and the impact of actual speed values is less for lower max speed %.
-MAX_SPEED_PCT = 0.68
+MAX_SPEED_PCT = 0.85
 
 # Action space mapped to on the vehicle for speed values of 0.8 and 0.4.
 DEFAULT_SPEED_SCALES = [1.0, 0.8]

@@ -81,7 +81,7 @@ def generate_launch_description():
         launch_ros.actions.Node(
             package='nav2_controller',
             executable='controller_server',
-            output='screen',
+            output='log',
             parameters=[configured_params],
             remappings=remappings),
 
@@ -89,7 +89,7 @@ def generate_launch_description():
             package='nav2_planner',
             executable='planner_server',
             name='planner_server',
-            output='screen',
+            output='log',
             parameters=[configured_params],
             remappings=remappings),
 

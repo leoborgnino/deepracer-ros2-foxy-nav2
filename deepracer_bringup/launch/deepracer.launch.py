@@ -25,6 +25,7 @@ def generate_launch_description():
         launch_ros.actions.Node(
             package='tf2_ros',
             executable='static_transform_publisher',
+            name='static_transform_camera',
             output='screen',
             arguments=['0.136966', '0', '0.143272', '0', '0.2618', '0', 'base_link', 'camera_link'],
             parameters=[
@@ -35,11 +36,11 @@ def generate_launch_description():
         launch_ros.actions.Node(
             package='tf2_ros',
             executable='static_transform_publisher',
+            name='static_transform_laser',
             output='screen',
             arguments=['0.02913', '0', '0.184699', '3.1416', '0', '0', 'base_link', 'laser_frame'],
             parameters=[
                 deepracer_bringup_dir + '/config/static_tf.yaml']),
-
 
         launch_ros.actions.Node(
             package='camera_pkg',
@@ -52,9 +53,9 @@ def generate_launch_description():
             ),
 
         launch_ros.actions.Node(
-            package='rplidar_ros2',
+            package='rplidar_ros',
             namespace='',
-            executable='rplidar_scan_publisher',
+            executable='rplidar_node',
             name='rplidar_scan_publisher',
             parameters=[{
                     'serial_port': '/dev/ttyUSB0',
@@ -72,14 +73,14 @@ def generate_launch_description():
             name='servo_node',
             remappings=[('/ctrl_pkg/servo_msg', '/cmdvel_to_servo_pkg/servo_msg')]
             ),
-
+       
         launch_ros.actions.Node(
             package='cmdvel_to_servo_pkg',
             namespace='cmdvel_to_servo_pkg',
             executable='cmdvel_to_servo_node',
             name='cmdvel_to_servo_node'
             ),
-
+        
         launch_ros.actions.Node(
             package='enable_deepracer_nav_pkg',
             namespace='enable_deepracer_nav_pkg',
@@ -98,8 +99,14 @@ def generate_launch_description():
                     'publish_tf': True,
                     'base_frame_id': 'base_link',
                     'odom_frame_id': 'odom',
-                    'init_pose_from_topic': '',
+                   'init_pose_from_topic': '',
                     'freq': 20.0}],
             )
+        #launch_ros.actions.Node(
+        #    package='rviz2',
+        #    namespace='',
+        #    executable='rviz2',
+        #    name='rviz2'
+        #    )
 
     ])

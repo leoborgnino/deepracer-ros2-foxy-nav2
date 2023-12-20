@@ -214,19 +214,25 @@ class CmdvelToServoNode(Node):
             throttle (float): Throttle value to be published to servo.
         """
         # Clamping the linear velocity between MAX_SPEED and MIN_SPEED supported by DeepRacer.
+        
+        self.get_logger().info("Target Linear: %f"%self.target_linear)
         target_linear_clamped = max(min(self.target_linear, constants.VehicleNav2Dynamics.MAX_SPEED),
                                             constants.VehicleNav2Dynamics.MIN_SPEED)
+        self.get_logger().info("Target Linear Clamped: %f"%target_linear_clamped)
         # Get the throttle values mapped wrt DeepRacer servo.
         target_throttle_mapped = self.get_mapped_throttle(target_linear_clamped)
+        self.get_logger().info("Target Throttle Clamped: %f"%target_throttle_mapped)
         # Set the direction.
-        target_throttle_signed = target_throttle_mapped * math.copysign(1.0, self.target_linear)
+        target_throttle_signed = target_linear_clamped# * math.copysign(1.0, self.target_linear)
+        self.get_logger().info("Target Throttle Signed: %f"%target_throttle_signed)
         # Get rescaled throttle.
         throttle = self.get_rescaled_manual_speed(target_throttle_signed, self.max_speed_pct)
+        self.get_logger().info("Throttle: %f"%throttle)
         # Clamping the rotation between MAX_STEER and MIN_STEER supported by DeepRacer.
-        target_rot_clamped = max(min(self.target_rot, constants.VehicleNav2Dynamics.MAX_STEER),
-                                        constants.VehicleNav2Dynamics.MIN_STEER)
+        #target_rot_clamped = max(min(self.target_rot, constants.VehicleNav2Dynamics.MAX_STEER),
+        #                                constants.VehicleNav2Dynamics.MIN_STEER)
         # Get the steering angle mapped wrt DeepRacer servo.
-        target_steering_mapped = self.get_mapped_steering(target_rot_clamped)
+        target_steering_mapped = self.get_mapped_steering(self.target_rot)
         # Set the direction.
         steering = target_steering_mapped * math.copysign(1.0, self.target_rot) * math.copysign(1.0, self.target_linear)
         return steering, throttle

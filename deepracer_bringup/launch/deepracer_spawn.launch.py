@@ -38,37 +38,37 @@ def generate_launch_description():
     )
 
     load_joint_state_controller = ExecuteProcess(
-        cmd=['ros2', 'control', 'load_controller', '--set-state', 'start',
+        cmd=['ros2', 'control', 'load_controller', '--set-state', 'start',#"--controller-manager-timeout", "20",
              'joint_state_controller'],
         output='screen'
     )
     load_left_rear_wheel_velocity_controller = ExecuteProcess(
-        cmd=['ros2', 'control', 'load_controller', '--set-state', 'start',
+        cmd=['ros2', 'control', 'load_controller', '--set-state', 'start',#"--controller-manager-timeout", "20",
              'left_rear_wheel_velocity_controller'],
         output='screen'
     )
     load_right_rear_wheel_velocity_controller = ExecuteProcess(
-        cmd=['ros2', 'control', 'load_controller', '--set-state', 'start',
+        cmd=['ros2', 'control', 'load_controller', '--set-state', 'start',#"--controller-manager-timeout", "20",
              'right_rear_wheel_velocity_controller'],
         output='screen'
     )
     load_left_front_wheel_velocity_controller = ExecuteProcess(
-        cmd=['ros2', 'control', 'load_controller', '--set-state', 'start',
+        cmd=['ros2', 'control', 'load_controller', '--set-state', 'start',#"--controller-manager-timeout", "20",
              'left_front_wheel_velocity_controller'],
         output='screen'
     )
     load_right_front_wheel_velocity_controller = ExecuteProcess(
-        cmd=['ros2', 'control', 'load_controller', '--set-state', 'start',
+        cmd=['ros2', 'control', 'load_controller', '--set-state', 'start',#"--controller-manager-timeout", "20",
              'right_front_wheel_velocity_controller'],
         output='screen'
     )
     load_left_steering_hinge_position_controller = ExecuteProcess(
-        cmd=['ros2', 'control', 'load_controller', '--set-state', 'start',
+        cmd=['ros2', 'control', 'load_controller', '--set-state', 'start',#"--controller-manager-timeout", "20",
              'left_steering_hinge_position_controller'],
         output='screen'
     )
     load_right_steering_hinge_position_controller = ExecuteProcess(
-        cmd=['ros2', 'control', 'load_controller', '--set-state', 'start',
+        cmd=['ros2', 'control', 'load_controller', '--set-state', 'start',#"--controller-manager-timeout", "20",
              'right_steering_hinge_position_controller'],
         output='screen'
     )
