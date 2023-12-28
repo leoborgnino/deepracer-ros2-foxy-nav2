@@ -73,12 +73,48 @@ def generate_launch_description():
         output='screen'
     )
 
+    ### Agregado
+    #load_left_rear_wheel_position_controller = ExecuteProcess(
+    #    cmd=['ros2', 'control', 'load_controller', '--set-state', 'start',#"--controller-manager-timeout", "20",
+    #         'left_rear_wheel_position_controller'],
+    #    output='screen'
+    #)
+    #load_right_rear_wheel_position_controller = ExecuteProcess(
+    #    cmd=['ros2', 'control', 'load_controller', '--set-state', 'start',#"--controller-manager-timeout", "20",
+    #         'right_rear_wheel_position_controller'],
+    #    output='screen'
+    #)
+    #load_left_front_wheel_position_controller = ExecuteProcess(
+    #    cmd=['ros2', 'control', 'load_controller', '--set-state', 'start',#"--controller-manager-timeout", "20",
+    #         'left_front_wheel_position_controller'],
+    #    output='screen'
+    #)
+    #load_right_front_wheel_position_controller = ExecuteProcess(
+    #    cmd=['ros2', 'control', 'load_controller', '--set-state', 'start',#"--controller-manager-timeout", "20",
+    #         'right_front_wheel_position_controller'],
+    #    output='screen'
+    #)
+    #
+    #load_left_steering_hinge_velocity_controller = ExecuteProcess(
+    #    cmd=['ros2', 'control', 'load_controller', '--set-state', 'start',#"--controller-manager-timeout", "20",
+    #         'left_steering_hinge_velocity_controller'],
+    #    output='screen'
+    #)
+    #load_right_steering_hinge_velocity_controller = ExecuteProcess(
+    #    cmd=['ros2', 'control', 'load_controller', '--set-state', 'start',#"--controller-manager-timeout", "20",
+    #         'right_steering_hinge_velocity_controller'],
+    #    output='screen'
+    #)
+    ###############
+    
     spawn_entity = Node(package='gazebo_ros', executable='spawn_entity.py',
                         arguments=['-topic', 'robot_description',
-                                   '-entity', 'deepracer', '-x', '0', '-y', '0', '-z', '0.03'],
+                                   '-entity', 'deepracer', '-x', '0', '-y', '0', '-z', '0.3'],
                         output='screen')
 
-    return LaunchDescription([RegisterEventHandler(
+    return LaunchDescription(
+        [
+        RegisterEventHandler(
             event_handler=OnProcessExit(
                 target_action=spawn_entity,
                 on_exit=[load_joint_state_controller],
@@ -92,18 +128,26 @@ def generate_launch_description():
                          load_left_front_wheel_velocity_controller,
                          load_right_front_wheel_velocity_controller,
                          load_left_steering_hinge_position_controller,
+                         # agregado
+                         #load_left_rear_wheel_position_controller,
+                         #load_right_rear_wheel_position_controller,
+                         #load_left_front_wheel_position_controller,
+                         #load_right_front_wheel_position_controller,
+                         #load_left_steering_hinge_velocity_controller,
+                         #load_right_steering_hinge_velocity_controller,
+                         # termina
                          load_right_steering_hinge_position_controller],
             )
         ),
-        robot_state_publisher_node,
         spawn_entity,
+        robot_state_publisher_node,
         launch_ros.actions.Node(
             package='tf2_ros',
             executable='static_transform_publisher',
             output='screen',
             arguments=['0.136966', '0', '0.143272', '0', '0.2618', '0', 'base_link', 'camera_link'],
             parameters=[
-                deepracer_bringup_dir + '/config/static_tf.yaml'
+                deepracer_bringup_dir + '/config/static_tf_sim.yaml'
             ]
             ),
         launch_ros.actions.Node(

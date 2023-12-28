@@ -29,8 +29,12 @@ limitations under the License.
   <!-- default lidar values as present in the DeepRacer device -->
   <xacro:arg name="lidar_360_degree_sample" default="600" />
   <xacro:arg name="lidar_360_degree_horizontal_resolution" default="1" />
+  <!--
   <xacro:arg name="lidar_360_degree_min_angle" default="-2.61799" />
   <xacro:arg name="lidar_360_degree_max_angle" default="2.61799" />
+  -->
+  <xacro:arg name="lidar_360_degree_min_angle" default="-3.141592" />
+  <xacro:arg name="lidar_360_degree_max_angle" default="3.141592" />
   <xacro:arg name="lidar_360_degree_min_range" default="0.15" />
   <xacro:arg name="lidar_360_degree_max_range" default="10.0" />
   <xacro:arg name="lidar_360_degree_range_resolution" default="0.01" />
@@ -55,7 +59,7 @@ limitations under the License.
   
   <!-- agent material -->
   <xacro:include filename="$(find deepracer_description)/models/xacro/material/deepracer_material.xacro" />
-  
+ 
   <!-- agent gazebo sensor -->
   <!-- front facing camera-->
   <xacro:if value="${'front_facing_camera' in sensor_type_val}">

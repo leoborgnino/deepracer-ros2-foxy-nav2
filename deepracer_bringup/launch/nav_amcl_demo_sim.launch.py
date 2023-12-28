@@ -20,6 +20,7 @@ from launch.actions import DeclareLaunchArgument, GroupAction
 from launch.actions import IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
+from launch.conditions import IfCondition
 from ament_index_python.packages import get_package_share_directory
 
 # demo of deepracer simulation in aws bookstore world with navigation and amcl
@@ -38,6 +39,7 @@ def generate_launch_description():
     declare_world_arg = DeclareLaunchArgument('world', default_value=bookstore_world, description='SDF world file')
     declare_map_arg = DeclareLaunchArgument('map', default_value=bookstore_map, description='map file')
     declare_params_arg = DeclareLaunchArgument('params', default_value=nav_params, description='params file')
+    declare_nav2_enable_arg = DeclareLaunchArgument('nav2_enable', default_value='true',description='Lanzar los nodos con el stack de navegación o no')
 
     include_files = GroupAction([
         # start deepracer simulation
@@ -45,22 +47,26 @@ def generate_launch_description():
             PythonLaunchDescriptionSource([deepracer_bringup_dir, '/launch/deepracer_sim.launch.py']),
             launch_arguments = {'world': world_cfg}.items()
          ),
-        # start navigation planner and controller
+        ## start navigation planner and controller
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource([deepracer_bringup_dir, '/launch/deepracer_navigation_sim.launch.py']),
-            launch_arguments = {'params': params_cfg}.items()
+            launch_arguments = {'params': params_cfg}.items(),
+            condition=IfCondition(LaunchConfiguration('nav2_enable'))
         ),
         # start localization (amcl) and map_server
         IncludeLaunchDescription(
-           PythonLaunchDescriptionSource([nav2_bringup_dir, '/launch/localization_launch.py']),
+            PythonLaunchDescriptionSource([nav2_bringup_dir, '/launch/localization_launch.py']),
             launch_arguments={'map': map_cfg,
-                              'params_file': params_cfg}.items()),
+                              'params_file': params_cfg}.items(),
+            condition=IfCondition(LaunchConfiguration('nav2_enable'))
+        ),
         ])
 
     ld = LaunchDescription()
     ld.add_action(declare_world_arg)
     ld.add_action(declare_map_arg)
     ld.add_action(declare_params_arg)
+    ld.add_action(declare_nav2_enable_arg)
     ld.add_action(include_files)
 
     return ld

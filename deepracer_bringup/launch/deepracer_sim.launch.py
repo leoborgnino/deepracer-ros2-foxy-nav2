@@ -56,7 +56,7 @@ def generate_launch_description():
             default_value='true'
         ),
         gazebo_server_launcher,
-        #gazebo_client_launcher,
+        gazebo_client_launcher,
         spawn_deepracer
     ])
 
