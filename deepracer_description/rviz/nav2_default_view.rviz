@@ -5,9 +5,10 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /Global Options1
-        - /TF1
         - /TF1/Frames1
         - /TF1/Tree1
+        - /Global Planner1
+        - /Controller1
       Splitter Ratio: 0.5833333134651184
     Tree Height: 525
   - Class: rviz_common/Selection
@@ -129,21 +130,27 @@ Visualization Manager:
       Enabled: true
       Frame Timeout: 15
       Frames:
-        All Enabled: false
+        All Enabled: true
         base_link:
           Value: true
         camera_link:
-          Value: false
+          Value: true
         chassis:
           Value: true
         laser:
-          Value: false
+          Value: true
+        left_front_wheel:
+          Value: true
+        left_rear_wheel:
+          Value: true
         left_steering_hinge:
           Value: true
-        map:
-          Value: true
         odom:
-          Value: false
+          Value: true
+        right_front_wheel:
+          Value: true
+        right_rear_wheel:
+          Value: true
         right_steering_hinge:
           Value: true
         shell:
@@ -156,17 +163,7 @@ Visualization Manager:
       Show Axes: true
       Show Names: false
       Tree:
-        map:
-          odom:
-            base_link:
-              chassis:
-                laser:
-                  {}
-                shell:
-                  {}
-                zed_camera_link:
-                  camera_link:
-                    {}
+        {}
       Update Interval: 0
       Value: true
     - Alpha: 1
@@ -261,7 +258,7 @@ Visualization Manager:
       Axes Radius: 0.009999999776482582
       Class: rviz_default_plugins/PoseArray
       Color: 0; 180; 0
-      Enabled: false
+      Enabled: true
       Head Length: 0.07000000029802322
       Head Radius: 0.029999999329447746
       Name: Amcl Particle Swarm
@@ -274,7 +271,7 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Best Effort
         Value: /particlecloud
-      Value: false
+      Value: true
     - Class: rviz_common/Group
       Displays:
         - Alpha: 0.30000001192092896
@@ -380,7 +377,7 @@ Visualization Manager:
         - Alpha: 1
           Class: rviz_default_plugins/Polygon
           Color: 25; 255; 0
-          Enabled: false
+          Enabled: true
           Name: Polygon
           Topic:
             Depth: 5
@@ -388,7 +385,7 @@ Visualization Manager:
             History Policy: Keep Last
             Reliability Policy: Reliable
             Value: /global_costmap/published_footprint
-          Value: false
+          Value: true
       Enabled: true
       Name: Global Planner
     - Class: rviz_common/Group
@@ -441,7 +438,7 @@ Visualization Manager:
             Value: /local_plan
           Value: true
         - Class: rviz_default_plugins/MarkerArray
-          Enabled: false
+          Enabled: true
           Name: Trajectories
           Namespaces:
             {}
@@ -451,7 +448,7 @@ Visualization Manager:
             History Policy: Keep Last
             Reliability Policy: Reliable
             Value: /marker
-          Value: false
+          Value: true
         - Alpha: 1
           Class: rviz_default_plugins/Polygon
           Color: 25; 255; 0
@@ -562,6 +559,87 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /waypoints
       Value: true
+    - Alpha: 1
+      Buffer Length: 1
+      Class: rviz_default_plugins/Path
+      Color: 25; 255; 0
+      Enabled: true
+      Head Diameter: 0.30000001192092896
+      Head Length: 0.20000000298023224
+      Length: 0.30000001192092896
+      Line Style: Lines
+      Line Width: 0.029999999329447746
+      Name: Path
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Pose Color: 255; 85; 255
+      Pose Style: None
+      Radius: 0.029999999329447746
+      Shaft Diameter: 0.10000000149011612
+      Shaft Length: 0.10000000149011612
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /local_plan
+      Value: true
+    - Alpha: 1
+      Arrow Length: 0.30000001192092896
+      Axes Length: 0.30000001192092896
+      Axes Radius: 0.009999999776482582
+      Class: rviz_default_plugins/PoseArray
+      Color: 255; 25; 0
+      Enabled: true
+      Head Length: 0.07000000029802322
+      Head Radius: 0.029999999329447746
+      Name: PoseArray
+      Shaft Length: 0.23000000417232513
+      Shaft Radius: 0.009999999776482582
+      Shape: Arrow (Flat)
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /particlecloud
+      Value: true
+    - Alpha: 1
+      Axes Length: 1
+      Axes Radius: 0.10000000149011612
+      Class: rviz_default_plugins/PoseWithCovariance
+      Color: 255; 25; 0
+      Covariance:
+        Orientation:
+          Alpha: 0.5
+          Color: 255; 255; 127
+          Color Style: Unique
+          Frame: Local
+          Offset: 1
+          Scale: 1
+          Value: true
+        Position:
+          Alpha: 0.30000001192092896
+          Color: 204; 51; 204
+          Scale: 1
+          Value: true
+        Value: true
+      Enabled: true
+      Head Length: 0.30000001192092896
+      Head Radius: 0.10000000149011612
+      Name: PoseWithCovariance
+      Shaft Length: 1
+      Shaft Radius: 0.05000000074505806
+      Shape: Arrow
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /amcl_pose
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -606,11 +684,11 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Scale: 142.45655822753906
+      Scale: 410.3833312988281
       Target Frame: <Fixed Frame>
       Value: TopDownOrtho (rviz_default_plugins)
-      X: 3.101248264312744
-      Y: -0.534058153629303
+      X: 0.24907220900058746
+      Y: -0.08943729102611542
     Saved: ~
 Window Geometry:
   Displays:

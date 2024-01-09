@@ -111,6 +111,12 @@ def generate_launch_description():
                         arguments=['-topic', 'robot_description',
                                    '-entity', 'deepracer', '-x', '0', '-y', '0', '-z', '0.3'],
                         output='screen')
+    spawn_person1 = Node(package='gazebo_ros', executable='spawn_entity.py',
+                        arguments=['-entity', 'mario', '-x', '2.4', '-y', '0', '-z', '0.3','-database','person_standing'],
+                        output='screen')
+    spawn_person2 = Node(package='gazebo_ros', executable='spawn_entity.py',
+                        arguments=['-entity', 'agus', '-x', '2.9', '-y', '0', '-z', '0.3','-database','person_standing'],
+                        output='screen')
 
     return LaunchDescription(
         [
@@ -140,6 +146,8 @@ def generate_launch_description():
             )
         ),
         spawn_entity,
+        spawn_person1,
+        spawn_person2,
         robot_state_publisher_node,
         launch_ros.actions.Node(
             package='tf2_ros',
