@@ -36,6 +36,8 @@ namespace PWM {
         char buf[MAX_BUF];
         len = snprintf(buf, sizeof(buf), "%d", value);
         write(fd, buf, len);
+	// print duty cycle info
+	RCLCPP_INFO(logger_, "Duty cycle to be written: %s, %d", buf, value);
         close(fd);
     }
     /// Rewriting the command to dynamically find the pwmchip%d directory and return the syspath
@@ -101,7 +103,9 @@ namespace PWM {
     void Servo::setDuty(int duty) {
         char dutyPath[MAX_BUF];
         snprintf(dutyPath, sizeof(dutyPath), (syspath_ + std::string("/pwm%d/duty_cycle")).c_str(), channel_);
+	//printf("Path: %s", syspath_.c_str);
         writePWM(dutyPath, duty, logger_);
+	RCLCPP_INFO(logger_, "Written duty cycle: %f", getDuty());
     }
 
     /// @returns Current value of the period.

@@ -16,7 +16,7 @@
 
 ACTION_PUBLISH_TOPIC = "servo_msg"
 SET_MAX_SPEED_SERVICE_NAME = "set_max_speed"
-
+ODOM_MSG_TOPIC = "odom_zero"
 CMDVEL_TOPIC = "/cmd_vel"
 
 

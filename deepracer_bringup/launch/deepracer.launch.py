@@ -101,7 +101,17 @@ def generate_launch_description():
                     'odom_frame_id': 'odom',
                    'init_pose_from_topic': '',
                     'freq': 20.0}],
-            )
+            ),
+
+        # Launch nodo IMU
+        launch_ros.actions.Node(
+            package='imu_pkg',
+            namespace='imu_pkg',
+            executable='imu_node',
+            output='screen',
+            name='imu_node'
+        )
+        
         #launch_ros.actions.Node(
         #    package='rviz2',
         #    namespace='',

@@ -38,6 +38,7 @@ import geometry_msgs.msg
 from deepracer_interfaces_pkg.msg import ServoCtrlMsg
 from deepracer_interfaces_pkg.srv import SetMaxSpeedSrv
 from cmdvel_to_servo_pkg import constants
+from nav_msgs.msg import Odometry
 import math
 import threading
 
@@ -59,6 +60,12 @@ class CmdvelToServoNode(Node):
                                      constants.CMDVEL_TOPIC,
                                      self.on_cmd_vel,
                                      qos_profile)
+        
+        # Create subscription to zero_motion topic
+        self.zero_motion_subscriber = self.create_subscription(Odometry,
+                                                               constants.ODOM_MSG_TOPIC,
+                                                               self.zeromotion_cb,
+                                                               qos_profile)
 
         # Creating publisher to publish action (angle and throttle).
         self.action_publisher = self.create_publisher(ServoCtrlMsg,
@@ -74,8 +81,19 @@ class CmdvelToServoNode(Node):
         self.target_linear = 0.0
         # Angular velocity in Z received on command (rad/s).
         self.target_rot = 0.0
+        # Target velocity and streering to publish
+        self.target_steer_n2 = 0.0
+        self.target_speed_n2 = 0.0
         # Max speed pct for throttle output to be rescaled with respect to.
         self.max_speed_pct = constants.MAX_SPEED_PCT
+        # Zero Motion status
+        self.zero_motion_status = 0
+        
+
+        ### Added for start
+        self.peak_cnt = 0
+        self.max_time_peak = 0
+        
         self.lock = threading.Lock()
 
     def set_max_speed_cb(self, req, res):
@@ -155,16 +173,45 @@ class CmdvelToServoNode(Node):
             (speed_mapping_coefficients["a"] * abs(categorized_throttle)**2 +
              speed_mapping_coefficients["b"] * abs(categorized_throttle))
 
+    def zeromotion_cb(self, msg):
+        """Callback on receiving zero motion update from IMU node
+        Args:
+           msg (Odometry): Odometry message"""
+        self.zero_motion_status = msg.pose.covariance[0]
+        n = 1 # regulates the increment in the target speed for the engines until the vehicule moves
+
+        # Checks if the robot is not moving even though a not-zero speed value was sent to the motor
+        # if this condition is true, then update the speed value to be published
+        if(self.zero_motion_status and self.target_speed_n2 != 0):
+            self.action_publish(self.target_streer_n2, self.target_speed_n2+0.05*n)
+            n = n + 1
+        else:
+            n = 1
+        
+
     def on_cmd_vel(self, msg):
         """Callback on receiving a velocity update from ROS2 Nav stack.
         Args:
             msg: (geometry_msgs.msg.Twist): Geometry twist message.
         """
         try:
+            # Linear position recieved from nav
             self.target_linear = msg.linear.x
+            # Angular position recieved from nav
             self.target_rot = msg.angular.z
-            target_steer, target_speed = self.plan_action()
-            self.action_publish(target_steer, target_speed)
+
+            self.get_logger().info("Target Linear: %f"%self.target_linear)
+            self.get_logger().info('target rot: {:+.2f}'.format(self.target_rot))
+            self.get_logger().info('target linear: {:+.2f}'.format(self.target_linear))
+
+            # Pwm action "calculated"
+            self.target_steer_n2, self.target_speed_n2 = self.plan_action()
+
+            self.get_logger().info('target steer n2: {:+.2f}'.format(self.target_steer_n2))
+            self.get_logger().info('target speed n2: {:+.2f}'.format(self.target_speed_n2))
+
+            # Sends pwm action to engienes
+            self.action_publish(self.target_steer_n2, self.target_speed_n2)
         except Exception as ex:
             self.get_logger().error(f"Failed to publish action: {ex}")
             self.action_publish(constants.ActionValues.DEFAULT_OUTPUT, constants.ActionValues.DEFAULT_OUTPUT)
@@ -208,33 +255,50 @@ class CmdvelToServoNode(Node):
 
     def plan_action(self):
         """Calculate the target steering and throttle.
-
+        Params:
+            zero_motion_status (boolean): Movement status.
+                                          - 1 if it is not moving.
+                                          - 0 if it is moving.
         Returns:
             steering (float): Angle value to be published to servo.
             throttle (float): Throttle value to be published to servo.
         """
-        # Clamping the linear velocity between MAX_SPEED and MIN_SPEED supported by DeepRacer.
         
+        # Clamping the linear velocity between MAX_SPEED and MIN_SPEED supported by DeepRacer.
         self.get_logger().info("Target Linear: %f"%self.target_linear)
         target_linear_clamped = max(min(self.target_linear, constants.VehicleNav2Dynamics.MAX_SPEED),
                                             constants.VehicleNav2Dynamics.MIN_SPEED)
         self.get_logger().info("Target Linear Clamped: %f"%target_linear_clamped)
+        
         # Get the throttle values mapped wrt DeepRacer servo.
         target_throttle_mapped = self.get_mapped_throttle(target_linear_clamped)
         self.get_logger().info("Target Throttle Clamped: %f"%target_throttle_mapped)
+        
         # Set the direction.
         target_throttle_signed = target_linear_clamped# * math.copysign(1.0, self.target_linear)
         self.get_logger().info("Target Throttle Signed: %f"%target_throttle_signed)
+        
         # Get rescaled throttle.
-        throttle = self.get_rescaled_manual_speed(target_throttle_signed, self.max_speed_pct)
+        if ( self.peak_cnt >= self.max_time_peak ):
+            throttle = self.get_rescaled_manual_speed(target_throttle_signed, self.max_speed_pct)
+        else:
+            throttle = math.copysign(1.0, self.target_linear)
+            self.peak_cnt += 1
         self.get_logger().info("Throttle: %f"%throttle)
+        
         # Clamping the rotation between MAX_STEER and MIN_STEER supported by DeepRacer.
-        #target_rot_clamped = max(min(self.target_rot, constants.VehicleNav2Dynamics.MAX_STEER),
-        #                                constants.VehicleNav2Dynamics.MIN_STEER)
+        target_rot_clamped = max(min(self.target_rot, constants.VehicleNav2Dynamics.MAX_STEER),
+                                        constants.VehicleNav2Dynamics.MIN_STEER)
+        
         # Get the steering angle mapped wrt DeepRacer servo.
-        target_steering_mapped = self.get_mapped_steering(self.target_rot)
+        #target_steering_mapped = self.get_mapped_steering(self.target_rot)
+        
         # Set the direction.
-        steering = target_steering_mapped * math.copysign(1.0, self.target_rot) * math.copysign(1.0, self.target_linear)
+        steering = target_rot_clamped * math.copysign(1.0, self.target_linear)
+
+        if (self.target_linear == 0):
+            self.peak_cnt = 0
+
         return steering, throttle
 
     def action_publish(self, target_steer, target_speed):

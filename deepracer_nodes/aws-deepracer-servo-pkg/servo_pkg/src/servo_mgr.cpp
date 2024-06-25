@@ -100,6 +100,7 @@ namespace PWM {
             }
         };
 
+	// printf pwm values
         setPWM(throttle_, servoMsg->throttle, motor);
         setPWM(angle_, servoMsg->angle, servo);
         // Make sure that the pulse goes through a full period
@@ -222,7 +223,7 @@ namespace PWM {
 
     /// Reads the calibration from the desired file and stores the values in memory
     /// @param calibrationMap Map to store the calibrations read from file
-    /// @param filePath Full file path of the file containing the calibrations, note the client verifies existence
+    /// @param filePath Full file path of the file containing the calibrations, note the client verifies existece
     void ServoMgr::setCalFromFile(std::unordered_map<int, std::unordered_map<std::string, int>> &calibrationMap,
                         const std::string &filePath) {
         Json::Value calJsonValue;
