@@ -30,9 +30,11 @@ The node defines:
 import rclpy
 from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
+from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.qos import (QoSProfile,
                        QoSHistoryPolicy,
                        QoSReliabilityPolicy)
+from std_srvs.srv import Trigger
 
 import geometry_msgs.msg
 from deepracer_interfaces_pkg.msg import ServoCtrlMsg
@@ -77,24 +79,65 @@ class CmdvelToServoNode(Node):
                                                          constants.SET_MAX_SPEED_SERVICE_NAME,
                                                          self.set_max_speed_cb)
 
-        # Linear velocity in X received on command (m/s).
+        # Service client to request motion state of DR for the first time
+        get_motion_state_cb_group = ReentrantCallbackGroup()
+        self.get_motion_state_client = self.create_client(Trigger,
+                                                           constants.GET_MOTION_STATE_CLIENT_NAME,
+                                                          callback_group=get_motion_state_cb_group)
+        while not self.get_motion_state_client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('get_motion_state_service not available, waiting again...')
+        self.get_motion_state_req = Trigger.Request()
+
+        # Linear velocity in X received on command (m/s) -- Nav2.
         self.target_linear = 0.0
-        # Angular velocity in Z received on command (rad/s).
+        # Angular velocity in Z received on command (rad/s) -- Nav2.
         self.target_rot = 0.0
         # Target velocity and streering to publish
         self.target_steer_n2 = 0.0
         self.target_speed_n2 = 0.0
         # Max speed pct for throttle output to be rescaled with respect to.
         self.max_speed_pct = constants.MAX_SPEED_PCT
-        # Zero Motion status
-        self.zero_motion_status = 0
         
+        # Zero Motion status
+        self.zero_motion_status = 0   # data recieved from imu
+        self.first_MO = True          # flag for service request
+        self.motion_state = 0         # DR movement status 
+        self.zm_target_speed = 0      # adjusted speed according to the 'no motion' status 
+        self.n = 1                    # regulates the increment in the target speed for the engines until the vehicule moves
 
+        # Timer to check motion state
+        #motion_state_timer = threading.Timer(0.1, self.check_motion_state)
+        #motion_state_timer.start() # start timer 
+        self.motion_state_timer = self.create_timer(0.1, self.check_motion_state)
+        
         ### Added for start
-        self.peak_cnt = 0
-        self.max_time_peak = 0
+        #self.peak_cnt = 0
+        #self.max_time_peak = 0
         
         self.lock = threading.Lock()
+
+    #def send_request(self):
+        #self.get_motion_state_req.data = data
+        #self.future = self.get_motion_state_client.call_async(self.get_motion_state_req)
+        #rclpy.spin_until_future_complete(self, self.future)
+        #self.get_logger().info(f"Service response: {self.future.result()}")
+        #return self.future.result()
+
+    def send_request(self):
+        self.future = self.get_motion_state_client.call_async(self.get_motion_state_req)
+        self.future.add_done_callback(self.handle_response)  # Add callback to handle response
+
+    def handle_response(self, future):
+        try:
+            response = future.result()
+            self.get_logger().info(f"Service response: {response}")
+            if response.success:
+                self.first_MO = False
+                self.setInitialMotionState(response.success)
+                self.get_logger().info(f'Initial no motion state: {response.success}')
+        except Exception as e:
+            self.get_logger().error(f"Service call failed: {e}")
+        
 
     def set_max_speed_cb(self, req, res):
         """Callback which dynamically sets the max_speed_pct.
@@ -178,17 +221,50 @@ class CmdvelToServoNode(Node):
         Args:
            msg (Odometry): Odometry message"""
         self.zero_motion_status = msg.pose.covariance[0]
-        n = 1 # regulates the increment in the target speed for the engines until the vehicule moves
+        self.motion_state = self.zero_motion_status
+        self.get_logger().info('Updated motion state ZM: {:+.1f}'.format(self.motion_state))
+
+    def check_motion_state(self):
+
+        if(self.first_MO):
+           self.send_request()
+           return
+
+        target_throttle = self.target_speed_n2
+        target_angle = self.target_steer_n2
+
+        #self.get_logger().info('Updated motion state CMS: {:+.1f}'.format(self.motion_state))
 
         # Checks if the robot is not moving even though a not-zero speed value was sent to the motor
         # if this condition is true, then update the speed value to be published
-        if(self.zero_motion_status and self.target_speed_n2 != 0):
-            self.action_publish(self.target_streer_n2, self.target_speed_n2+0.05*n)
-            n = n + 1
+        if(self.motion_state and self.target_speed_n2 > 0.4):
+
+            self.get_logger().info('Regular motion state updates, CMS: {:+.1f}'.format(self.motion_state))
+            self.get_logger().info(f"Current time in seconds: {self.get_clock().now().to_msg().sec}")
+            
+            self.get_logger().info('-------------------------------------------------------------------')
+            self.get_logger().info('TS before checking ZM status:{:+.3f}'.format(self.target_speed_n2))
+
+            if(abs(self.target_speed_n2+0.05*(self.n+1)) <= 1):
+                
+                self.n = self.n + 1
+
+            target_throttle = target_throttle+0.05*self.n    
+            self.action_publish(target_angle, target_throttle)
+                
+
+            self.get_logger().info('TS after checking ZM status:{:+.3f}'.format(target_throttle))
+            self.get_logger().info('-------------------------------------------------------------------')
+            
         else:
-            n = 1
+            self.n = 1
+            self.action_publish(target_angle, target_throttle)
         
 
+    def setInitialMotionState(self, initial_mo_state):
+        self.motion_state = initial_mo_state
+        self.get_logger().info(f'Initial no motion state: {initial_mo_state}')
+        
     def on_cmd_vel(self, msg):
         """Callback on receiving a velocity update from ROS2 Nav stack.
         Args:
@@ -200,18 +276,20 @@ class CmdvelToServoNode(Node):
             # Angular position recieved from nav
             self.target_rot = msg.angular.z
 
-            self.get_logger().info("Target Linear: %f"%self.target_linear)
+            # Nav2 messege
+            self.get_logger().info('Nav2 mssg')
             self.get_logger().info('target rot: {:+.2f}'.format(self.target_rot))
             self.get_logger().info('target linear: {:+.2f}'.format(self.target_linear))
 
             # Pwm action "calculated"
             self.target_steer_n2, self.target_speed_n2 = self.plan_action()
 
-            self.get_logger().info('target steer n2: {:+.2f}'.format(self.target_steer_n2))
-            self.get_logger().info('target speed n2: {:+.2f}'.format(self.target_speed_n2))
+            self.get_logger().info('PWM action')
+            self.get_logger().info('PWM target steer n2: {:+.2f}'.format(self.target_steer_n2))
+            self.get_logger().info('PWM target speed n2: {:+.2f}'.format(self.target_speed_n2))
 
-            # Sends pwm action to engienes
             self.action_publish(self.target_steer_n2, self.target_speed_n2)
+            
         except Exception as ex:
             self.get_logger().error(f"Failed to publish action: {ex}")
             self.action_publish(constants.ActionValues.DEFAULT_OUTPUT, constants.ActionValues.DEFAULT_OUTPUT)
@@ -255,10 +333,7 @@ class CmdvelToServoNode(Node):
 
     def plan_action(self):
         """Calculate the target steering and throttle.
-        Params:
-            zero_motion_status (boolean): Movement status.
-                                          - 1 if it is not moving.
-                                          - 0 if it is moving.
+        
         Returns:
             steering (float): Angle value to be published to servo.
             throttle (float): Throttle value to be published to servo.
@@ -277,14 +352,17 @@ class CmdvelToServoNode(Node):
         # Set the direction.
         target_throttle_signed = target_linear_clamped# * math.copysign(1.0, self.target_linear)
         self.get_logger().info("Target Throttle Signed: %f"%target_throttle_signed)
+
+        throttle = self.get_rescaled_manual_speed(target_throttle_signed, self.max_speed_pct)
         
         # Get rescaled throttle.
-        if ( self.peak_cnt >= self.max_time_peak ):
-            throttle = self.get_rescaled_manual_speed(target_throttle_signed, self.max_speed_pct)
-        else:
-            throttle = math.copysign(1.0, self.target_linear)
-            self.peak_cnt += 1
-        self.get_logger().info("Throttle: %f"%throttle)
+        #if ( self.peak_cnt >= self.max_time_peak ):
+        #    throttle = self.get_rescaled_manual_speed(target_throttle_signed, self.max_speed_pct)
+        #else:
+        #    throttle = math.copysign(1.0, self.target_linear)
+        #    self.peak_cnt += 1
+
+        self.get_logger().info("Throttle to send: %f"%throttle)
         
         # Clamping the rotation between MAX_STEER and MIN_STEER supported by DeepRacer.
         target_rot_clamped = max(min(self.target_rot, constants.VehicleNav2Dynamics.MAX_STEER),
@@ -296,8 +374,8 @@ class CmdvelToServoNode(Node):
         # Set the direction.
         steering = target_rot_clamped * math.copysign(1.0, self.target_linear)
 
-        if (self.target_linear == 0):
-            self.peak_cnt = 0
+        #if (self.target_linear == 0):
+            #self.peak_cnt = 0
 
         return steering, throttle
 
@@ -311,6 +389,7 @@ class CmdvelToServoNode(Node):
         result = ServoCtrlMsg()
         result.angle, result.throttle = target_steer, target_speed
         self.get_logger().info(f"Publishing to servo: Steering {target_steer} | Throttle {target_speed}")
+        
         self.action_publisher.publish(result)
 
 
@@ -321,6 +400,8 @@ def main(args=None):
                      history=QoSHistoryPolicy.RMW_QOS_POLICY_HISTORY_KEEP_LAST)
     cmdvel_to_servo_node = CmdvelToServoNode(qos)
     executor = MultiThreadedExecutor()
+    #motion_state = cmdvel_to_servo_node.send_request()
+    #cmdvel_to_servo.setInitialMotionState(motion_state)
     rclpy.spin(cmdvel_to_servo_node, executor)
 
     # Destroy the node explicitly
