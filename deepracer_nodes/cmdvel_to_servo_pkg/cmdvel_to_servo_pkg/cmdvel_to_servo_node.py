@@ -38,6 +38,7 @@ from std_srvs.srv import Trigger
 
 import geometry_msgs.msg
 from deepracer_interfaces_pkg.msg import ServoCtrlMsg
+from std_msgs.msg import String
 from deepracer_interfaces_pkg.srv import SetMaxSpeedSrv
 from cmdvel_to_servo_pkg import constants
 from nav_msgs.msg import Odometry
@@ -70,9 +71,18 @@ class CmdvelToServoNode(Node):
                                                                qos_profile)
 
         # Creating publisher to publish action (angle and throttle).
+        #self.action_msg_pub_cb_grp = ReentrantCallbackGroup()
         self.action_publisher = self.create_publisher(ServoCtrlMsg,
                                                       constants.ACTION_PUBLISH_TOPIC,
                                                       qos_profile)
+                                                      #callback_group=self.action_msg_pub_cb_grp)
+        
+        # Debug publisher to publish nav2 incoming data
+        #self.debug_msg_pub_cb_grp = ReentrantCallbackGroup()
+        #self.debug_publisher = self.create_publisher(String,
+        #                                             constants.DEBUG_TOPIC,
+        #                                             qos_profile,
+        #                                             callback_group=self.action_msg_pub_cb_grp)
 
         # Service to dynamically set MAX_SPEED_PCT.
         self.set_max_speed_service = self.create_service(SetMaxSpeedSrv,
@@ -108,7 +118,7 @@ class CmdvelToServoNode(Node):
         # Timer to check motion state
         #motion_state_timer = threading.Timer(0.1, self.check_motion_state)
         #motion_state_timer.start() # start timer 
-        self.motion_state_timer = self.create_timer(0.1, self.check_motion_state)
+        self.motion_state_timer = self.create_timer(0.01, self.check_motion_state)
         
         ### Added for start
         #self.peak_cnt = 0
@@ -237,15 +247,15 @@ class CmdvelToServoNode(Node):
 
         # Checks if the robot is not moving even though a not-zero speed value was sent to the motor
         # if this condition is true, then update the speed value to be published
-        if(self.motion_state and self.target_speed_n2 > 0.4):
+        if(self.motion_state and target_throttle > 0.4):
 
-            self.get_logger().info('Regular motion state updates, CMS: {:+.1f}'.format(self.motion_state))
-            self.get_logger().info(f"Current time in seconds: {self.get_clock().now().to_msg().sec}")
+            #self.get_logger().info('Regular motion state updates, CMS: {:+.1f}'.format(self.motion_state))
+            #self.get_logger().info(f"Current time in seconds: {self.get_clock().now().to_msg().sec}")
             
-            self.get_logger().info('-------------------------------------------------------------------')
-            self.get_logger().info('TS before checking ZM status:{:+.3f}'.format(self.target_speed_n2))
+            #self.get_logger().info('-------------------------------------------------------------------')
+            #self.get_logger().info('TS before checking ZM status:{:+.3f}'.format(self.target_speed_n2))
 
-            if(abs(self.target_speed_n2+0.05*(self.n+1)) <= 1):
+            if(abs(target_throttle+0.05*(self.n+1)) <= 1):
                 
                 self.n = self.n + 1
 
@@ -253,8 +263,8 @@ class CmdvelToServoNode(Node):
             self.action_publish(target_angle, target_throttle)
                 
 
-            self.get_logger().info('TS after checking ZM status:{:+.3f}'.format(target_throttle))
-            self.get_logger().info('-------------------------------------------------------------------')
+            #self.get_logger().info('TS after checking ZM status:{:+.3f}'.format(target_throttle))
+            #self.get_logger().info('-------------------------------------------------------------------')
             
         else:
             self.n = 1
@@ -273,20 +283,23 @@ class CmdvelToServoNode(Node):
         try:
             # Linear position recieved from nav
             self.target_linear = msg.linear.x
+            #msg = String()
+            #msg.data = 'Nav2 target linear: %d' % self.target_linear
+            #self.debug_publisher.publish(msg)
             # Angular position recieved from nav
             self.target_rot = msg.angular.z
 
             # Nav2 messege
             self.get_logger().info('Nav2 mssg')
-            self.get_logger().info('target rot: {:+.2f}'.format(self.target_rot))
+            #self.get_logger().info('target rot: {:+.2f}'.format(self.target_rot))
             self.get_logger().info('target linear: {:+.2f}'.format(self.target_linear))
 
             # Pwm action "calculated"
             self.target_steer_n2, self.target_speed_n2 = self.plan_action()
 
-            self.get_logger().info('PWM action')
-            self.get_logger().info('PWM target steer n2: {:+.2f}'.format(self.target_steer_n2))
-            self.get_logger().info('PWM target speed n2: {:+.2f}'.format(self.target_speed_n2))
+            #self.get_logger().info('PWM action')
+            #self.get_logger().info('PWM target steer n2: {:+.2f}'.format(self.target_steer_n2))
+            #self.get_logger().info('PWM target speed n2: {:+.2f}'.format(self.target_speed_n2))
 
             self.action_publish(self.target_steer_n2, self.target_speed_n2)
             
@@ -388,7 +401,7 @@ class CmdvelToServoNode(Node):
         """
         result = ServoCtrlMsg()
         result.angle, result.throttle = target_steer, target_speed
-        self.get_logger().info(f"Publishing to servo: Steering {target_steer} | Throttle {target_speed}")
+        #self.get_logger().info(f"Publishing to servo: Steering {target_steer} | Throttle {target_speed}")
         
         self.action_publisher.publish(result)
 

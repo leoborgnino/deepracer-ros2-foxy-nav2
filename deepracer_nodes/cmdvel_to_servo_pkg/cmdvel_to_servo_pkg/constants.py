@@ -19,7 +19,7 @@ SET_MAX_SPEED_SERVICE_NAME = "set_max_speed"
 GET_MOTION_STATE_CLIENT_NAME = "/imu_pkg/get_motion_state_service"
 ODOM_MSG_TOPIC = "/imu_pkg/odom_zero"
 CMDVEL_TOPIC = "/cmd_vel"
-
+DEBUG_TOPIC = "/debug_topic"
 
 class VehicleNav2Dynamics():
     """Class with the vehicle dynamics constants for physical
