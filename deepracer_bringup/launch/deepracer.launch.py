@@ -52,7 +52,7 @@ def generate_launch_description():
             ]
             ),
 
-        # Launch nodo IMU
+        # Launch IMU node
         launch_ros.actions.Node(
             package='imu_pkg',
             namespace='imu_pkg',

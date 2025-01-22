@@ -146,8 +146,8 @@ def generate_launch_description():
             )
         ),
         spawn_entity,
-        spawn_person1,
-        spawn_person2,
+        #spawn_person1,
+        #spawn_person2,
         robot_state_publisher_node,
         launch_ros.actions.Node(
             package='tf2_ros',
@@ -168,3 +168,4 @@ def generate_launch_description():
             ]
             )
     ])
+

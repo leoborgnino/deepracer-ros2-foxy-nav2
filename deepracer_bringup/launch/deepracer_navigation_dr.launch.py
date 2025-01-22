@@ -81,7 +81,7 @@ def generate_launch_description():
         launch_ros.actions.Node(
             package='nav2_controller',
             executable='controller_server',
-            output='log',
+            output='screen',
             parameters=[configured_params],
             remappings=remappings),
 
