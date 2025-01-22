@@ -117,7 +117,7 @@ class IMUNode(Node):
         """
 
         self.nomotion_state = self.sensor.getIntZeroMotionStatus()
-        self.get_logger().info("Incoming request: get DR motion state")
+        #self.get_logger().info("Incoming request: get DR motion state")
 
         if(self.nomotion_state):
             response.success = True
@@ -153,6 +153,7 @@ class IMUNode(Node):
             self.sensor.setAccelDLPFMode(0)
 
             # Defining the Range for Accelerometer and Gyroscope
+            ##### PROBAR CONFIGURAR EL RANGO EN 2G PARA EL ACELERÓMETRO #####
             self.sensor.setFullScaleAccelRange(constants.DEF_ACCEL_RANGE_4G, constants.ACCEL_RANGE_4G_FLOAT)
             self.sensor.setFullScaleGyroRange(constants.DEF_GYRO_RANGE_250, constants.GYRO_RANGE_250_FLOAT)
             
@@ -166,7 +167,7 @@ class IMUNode(Node):
             
             ## Enable standing still check
             if self._zero_motion:
-                self.sensor.setZeroMotionDetectionDuration(1)
+                self.sensor.setZeroMotionDetectionDuration(0x00)
                 self.sensor.setZeroMotionDetectionThreshold(0x02)
                 self.sensor.setIntZeroMotionEnabled(True)
 
@@ -276,7 +277,7 @@ class IMUNode(Node):
             imu_msg.header.stamp = self.get_clock().now().to_msg()
             imu_msg.header.frame_id = 'base_link'
 
-            #self.get_logger().info('ax: {:+.0f}'.format(accel.x))
+            #self.get_logger().info('ax: {:+.3f}'.format(accel.x))
             #self.get_logger().info('ay: {:+.3f}'.format(accel.y))
             #self.get_logger().info('az: {:+.0f}'.format(accel.z))
 

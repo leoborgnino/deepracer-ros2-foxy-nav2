@@ -42,13 +42,14 @@ from std_msgs.msg import String
 from deepracer_interfaces_pkg.srv import SetMaxSpeedSrv
 from cmdvel_to_servo_pkg import constants
 from nav_msgs.msg import Odometry
+from sensor_msgs.msg import Imu
 import math
 import threading
 
 #----------------------------------------------------------------------------#
 import csv
 import os
-#from datetime import datetime
+from datetime import datetime
 
 
 class CmdvelToServoNode(Node):
@@ -96,7 +97,12 @@ class CmdvelToServoNode(Node):
                                                                constants.ODOM_MSG_TOPIC,
                                                                self.zeromotion_cb,
                                                                qos_profile)
-        
+            
+            self.imu_accel_subscriber = self.create_subscription(Imu,
+                                                            constants.IMU_MSG_TOPIC,
+                                                            self.imu_accel_cb,
+                                                            qos_profile)
+            
             # Service_client to request motion state of DR for the first time
             get_motion_state_cb_group = ReentrantCallbackGroup()
             self.get_motion_state_client = self.create_client(Trigger,
@@ -116,6 +122,10 @@ class CmdvelToServoNode(Node):
             self.slope = 0.1
             self._first_time = True
             self._peak = 0
+
+            # Imu acceleration
+            self.imu_accel_x = 0
+            self.imu_accel_y = 0
         
             # Timer to check motion state of the robot
             self.motion_state_timer = self.create_timer(0.01, self.check_motion_state) # o poner en 1
@@ -246,6 +256,10 @@ class CmdvelToServoNode(Node):
             (speed_mapping_coefficients["a"] * abs(categorized_throttle)**2 +
              speed_mapping_coefficients["b"] * abs(categorized_throttle))
 
+    def imu_accel_cb(self, msg):
+        self.imu_accel_x = msg.linear_acceleration.x
+        self.imu_accel_y = msg.linear_acceleration.y
+
     def zeromotion_cb(self, msg):
         """Callback on receiving zero motion update from IMU node
         Args:
@@ -265,8 +279,8 @@ class CmdvelToServoNode(Node):
 
 
         # If robot's speed value is below threshold value sends 0 as throttle value
-        if(abs(target_throttle) < 0.1 or abs(target_throttle) == 0.1):
-            self._n = 0
+        if(abs(target_throttle) == 0.0):  #or abs(target_throttle) == 0.1):
+            #self._n = 0
             self.action_publish(0.0, 0.0)
             return
 
@@ -274,7 +288,7 @@ class CmdvelToServoNode(Node):
         # if this condition is true, then updates the speed value to be published.
         # Otherwise, if the robot is moving when a not-zero speed was sent publishes again the angle and
         # throttle values calculate by plan_action
-        if(self.no_motion_state and (abs(target_throttle) > 0.1)):
+        if(self.no_motion_state and (abs(target_throttle) != 0.0)):
 
             self._n = self._n + 1
 
@@ -295,13 +309,21 @@ class CmdvelToServoNode(Node):
                 self._peak = self._n
                 self._first_time = False
             self._n = self._peak
-            self.action_publish(target_angle, target_throttle)
+            
+            if(target_throttle < 0.6):
+                target_throttle = 0.6
+                self.action_publish(target_angle, target_throttle)
+            else:
+                self.action_publish(target_angle, target_throttle)
 
         ## ------------------------------------------------------------------------------------ ##    
         self.get_logger().info('Nav2 setted throttle: {:+4f}'.format(self.target_speed_n2))
         self.get_logger().info('Calculated throttle: {:+4f}'.format(target_throttle))
-        self.get_logger().info('Peak: {:+4f}'.format(self._peak))
-        self.get_logger().info('N: {:+4f}'.format(self._n))
+        #self.get_logger().info('Peak: {:+4f}'.format(self._peak))
+        #self.get_logger().info('N: {:+4f}'.format(self._n))
+        self.get_logger().info('Acceleration X: {:+4f}'.format(self.imu_accel_x))
+        self.get_logger().info('Acceleration Y: {:+4f}'.format(self.imu_accel_y))
+        self.get_logger().info('No_motion_state: {:+4f}'.format(self.no_motion_state))
         ## ------------------------------------------------------------------------------------ ##
         
 
