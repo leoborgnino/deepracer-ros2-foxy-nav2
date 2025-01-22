@@ -123,6 +123,7 @@ class BasicNavigator(Node):
 
         # Retorna el goal handle si se pudo generar el path
         return self.goal_handle
+    
 
     def followWaypoints(self, poses):
         """Send a `FollowWaypoints` action request."""
