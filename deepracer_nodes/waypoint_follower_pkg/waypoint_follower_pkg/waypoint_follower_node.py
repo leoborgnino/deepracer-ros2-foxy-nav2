@@ -23,10 +23,10 @@ class WaypointFollowerNode(Node):
         self.initial_pose = PoseStamped()
         self.initial_pose.header.frame_id = 'map'
         self.initial_pose.header.stamp = self.navigator.get_clock().now().to_msg()
-        self.initial_pose.pose.position.x = 0.097
-        self.initial_pose.pose.position.y = 0.016
+        self.initial_pose.pose.position.x = 0.005
+        self.initial_pose.pose.position.y = 0.102
         self.initial_pose.pose.orientation.z = 0.0
-        self.initial_pose.pose.orientation.w = -0.094 #1.0
+        self.initial_pose.pose.orientation.w = 0.028 #1.0
         self.navigator.setInitialPose(self.initial_pose)
 
         time.sleep(3.0)
@@ -78,7 +78,7 @@ class WaypointFollowerNode(Node):
         self.get_logger().info("Navigating through waypoints...")
 
         # Lista de poses objetivo
-        waypoints = [self.create_pose_stamped(1.014,-0.011,0.0),self.create_pose_stamped(1.855,-0.008,0.0),self.create_pose_stamped(2.667,0.005,0.0)]
+        waypoints = [self.create_pose_stamped(0.784,0.186,0.045),self.create_pose_stamped(1.404,1.175,1.483)] #,self.create_pose_stamped(2.667,0.005,0.0)]
 
         # Iterar sobre las poses y enviarlas secuencialmente
         for i, pose in enumerate(waypoints):

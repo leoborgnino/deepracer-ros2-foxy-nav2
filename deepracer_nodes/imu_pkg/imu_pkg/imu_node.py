@@ -42,6 +42,9 @@ from imu_pkg import (constants)
 
 from rcl_interfaces.msg import ParameterDescriptor, ParameterType
 
+import csv
+import os
+
 
 class IMUNode(Node):
     """Node responsible for collecting the camera and LiDAR messages and publishing them
@@ -68,7 +71,6 @@ class IMUNode(Node):
         self._address = self.get_parameter('address').value
         self._publish_rate = self.get_parameter('publish_rate').value
         self._zero_motion = self.get_parameter('zero_motion_odometer').value
-        self.nomotion_state = 1; #flag to detect a change in zero motion status
 
         self.get_logger().info("zero motion value {:+.0f}".format(self._zero_motion))
 
@@ -87,19 +89,22 @@ class IMUNode(Node):
                                                                 constants.ODOM_MSG_TOPIC,
                                                                 1,
                                                                 callback_group=self.odom_message_pub_cb_grp)
-            
+            self.nomotion_state = 1; # zero motion status
 
-        # Service to send motion state of the DR for the first time    
+
+        # Service to send motion state of the DR for the first time
         self.get_motion_state_service = self.create_service(Trigger,
                                                            constants.GET_MOTION_STATE_SERVICE_NAME,
                                                            self.get_motion_state_cb)
         self.get_logger().info('Service get_motion_state_service ready')
 
+        
         # Heartbeat timer.
         self.timer_count = 0
         self.timer = self.create_timer(5.0, self.timer_callback)
 
-        self.initial_time = self.get_clock().now().to_msg().sec
+        self.file_path = os.path.join('/home/deepracer/deepracer_nav2_ws/deepracer_files/navigation_files/', 'imu_acceletarion_data.csv')
+        self.write_file = False 
 
         self.get_logger().info("IMU node created.")
 
@@ -141,29 +146,27 @@ class IMUNode(Node):
         """
         try:
 
-            # self.get_logger().info(f"Trying to initialize the sensor at {constants.BMI160_ADDR}
-            # on bus {constants.I2C_BUS_ID}")
+            # Get bus ID for IMU
             I2C_ID = I2CID.I2C_ID()
             I2C_BUS_ID = I2C_ID.getId(1)
             
             self.sensor = BMI160.IMU_BMI160(I2C_BUS_ID)  # Depends on changes to library
 
-            # configure sampling rate and filter
+            # Configure sampling rate and filter
             self.sensor.set_accel_rate(6)   # 100Hz
             self.sensor.setAccelDLPFMode(0)
 
-            # Defining the Range for Accelerometer and Gyroscope
-            ##### PROBAR CONFIGURAR EL RANGO EN 2G PARA EL ACELERÓMETRO #####
+            # Defining the Range for Accelerometer and Gyroscope#
             self.sensor.setFullScaleAccelRange(constants.DEF_ACCEL_RANGE_4G, constants.ACCEL_RANGE_4G_FLOAT)
             self.sensor.setFullScaleGyroRange(constants.DEF_GYRO_RANGE_250, constants.GYRO_RANGE_250_FLOAT)
             
-            ## Calibrating Accelerometer - assuming that it stands on 'flat ground'.
+            # Calibrating Accelerometer assuming it stands on 'flat ground'.
             ## Gravity points downwards, hence Z should be calibrated to -1.
             self.sensor.setAccelOffsetEnabled(True)
             
             self.sensor.autoCalibrateXAccelOffset(0)
             self.sensor.autoCalibrateYAccelOffset(0)
-            self.sensor.autoCalibrateZAccelOffset(-1)
+            self.sensor.autoCalibrateZAccelOffset(0) #-1
             
             ## Enable standing still check
             if self._zero_motion:
@@ -214,6 +217,8 @@ class IMUNode(Node):
         try:
             imu_msg = Imu()
             data = self.sensor.get_accel_gyro()
+
+            timestamp =  timestamp = time.time_ns()*1000000 #self.get_clock().now().to_msg()
             
             # if zero motion is active publish odometry information in topic
             if self._zero_motion:
@@ -230,9 +235,6 @@ class IMUNode(Node):
                 odom_msg.twist.twist.linear = Vector3()
                 odom_msg.twist.covariance = constants.EMPTY_ARRAY_36
 
-              
-               # self.get_logger().info('no motion state: {:+.1f}'.format(self.nomotion_state))
-               # self.nomotion_state = no_motion
                 
                 # Sends new data only when there is a change in the state of motion of the robot
                 if(abs(no_motion-self.nomotion_state) != 0):
@@ -240,7 +242,6 @@ class IMUNode(Node):
                     #self.get_logger().info('no motion state: {:+.1f}'.format(self.nomotion_state))
                     self.nomotion_state = no_motion
                     self.odom_message_publisher.publish(odom_msg)
-                    #self.initial_time = self.get_clock().now().to_msg().sec
 
 
                     
@@ -286,6 +287,13 @@ class IMUNode(Node):
             #self.get_logger().info('gz: {:+.0f}'.format(gyro.z))
 
             #self.get_logger().info(str(data))
+            
+            if(self.write_file):
+                with open(self.file_path, mode='a', newline='') as file:
+                    writer = csv.writer(file)
+                    if file.tell() == 0:
+                        writer.writerow(['time','no motion','x accel','y accel','z accel'])
+                    writer.writerow([timestamp,self.nomotion_state,accel.x,accel.y,accel.z])
 
             self.imu_message_publisher.publish(imu_msg)
         

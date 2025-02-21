@@ -40,7 +40,7 @@ controller_server:
   ros__parameters:
     use_sim_time: True
     controller_frequency: 20.0
-    min_x_velocity_threshold: 0.001
+    min_x_velocity_threshold: 0.01 #0.001
     min_y_velocity_threshold: 0.5
     min_theta_velocity_threshold: 0.001
     progress_checker_plugin: "progress_checker"
@@ -53,37 +53,38 @@ controller_server:
       movement_time_allowance: 10.0
     goal_checker:
       plugin: "nav2_controller::SimpleGoalChecker"
-      xy_goal_tolerance: 0.5
-      yaw_goal_tolerance: 1.5
+      xy_goal_tolerance: 0.1 #10cm
+      yaw_goal_tolerance: 0.78 #45grad
       stateful: True
     FollowPath:
       plugin: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
-      desired_linear_vel: 0.5
-      max_linear_accel: 1.2
-      max_linear_decel: 2.5
-      lookahead_dist: 0.6  #cambiar a 1m y probar
-      min_lookahead_dist: 0.3
-      max_lookahead_dist: 0.9
-      lookahead_time: 1.5
+      desired_linear_vel: 0.75
+      lookahead_dist: 0.4 
+      min_lookahead_dist: 0.25
+      max_lookahead_dist: 1.5
+      lookahead_time: 3.5
       rotate_to_heading_angular_vel: 0.8
-      transform_tolerance: 0.1
+      transform_tolerance: 0.1 #0.5
       use_velocity_scaled_lookahead_dist: false
-      min_approach_linear_velocity: 0.05
+      min_approach_linear_velocity: 0.4 #0.5
       use_approach_linear_velocity_scaling: true
-      max_allowed_time_to_collision: 1.0
-      use_regulated_linear_velocity_scaling: true
-      use_cost_regulated_linear_velocity_scaling: false
-      regulated_linear_scaling_min_radius: 0.9
-      regulated_linear_scaling_min_speed: 0.25
-      rotate_to_heading_min_angle: 0.785
-      max_angular_accel: 2.5
-      cost_scaling_dist: 0.7
-      cost_scaling_gain: 1.0
-      inflation_cost_scaling_factor: 1.5
-      use_rotate_to_heading: false
-      allow_reversing: true
+      approach_velocity_scaling_dist: 0.9         # should be less than half of costmap width
+      use_collision_detection: true               # enable colision detection for regulating velocity
+      max_allowed_time_to_collision: 1.0          # max time to check for collisions: if any possible colision within this time is detected nav2 will reduce the velocity
+      use_regulated_linear_velocity_scaling: true # enable regulation in velocity for path curvature (e.g. slow on high curvature paths).
+      use_cost_regulated_linear_velocity_scaling: true  # enable regulation in velocity based on cost function (e.g. slow movements in close proximity to obtacles)
+      regulated_linear_scaling_min_radius: 0.9          # minimum turning radius (m) for which the velocity is regulated/reduced 
+      regulated_linear_scaling_min_speed: 0.25          # minimum speed (m/s) that controller can send when regulating speed to ensure robot is still moving 
+      use_fixed_curvature_lookahead: false              # enable using fixed lookahead distance to compute curvature form 
+      curvature_lookahead_dist: 0.5                     # distance to look ahead on path to detect curvature  
+      use_rotate_to_heading: false                      # enable rotating to heading before following path
+      allow_reversing: false                            # enable the robot to drive in the reverse direction (mostly use by the controller when use_rotate_to_heading is enable)
+      rotate_to_heading_min_angle: 0.785 # 45grad       # minimum angle to 'activate' rotate to heading
+      max_angular_accel: 2.5                            # max. allowable angular acceleration when use_rotate_to_heading is enable
+      cost_scaling_dist: 0.25                           # distance from an obstacle to trigger the scaling of linear velocity (linear velocity will be reduced if any object is within this distance this radio); should be <= inflation_radious 
+      cost_scaling_gain: 0.25 #1.0                      # multiplier gain used to scale speed when and obstacle is within cost_scaling_dist; should be <=1 and lower values reduces speed more quickly
+      inflation_cost_scaling_factor: 2.0 #0.75; 3.0           # value of cost_scaling_factor set for the inflation layer in the local costmap; should be exactly the same for accurately computing distance from obstacles using the inflated cell values
       
-
 controller_server_rclcpp_node:
   ros__parameters:
     use_sim_time: True
@@ -104,13 +105,8 @@ local_costmap:
       plugins: ["voxel_layer", "inflation_layer"]
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-<<<<<<< HEAD
-        cost_scaling_factor: 1.0
-        inflation_radius: 0.25
-=======
-        cost_scaling_factor: 1.0 #3.0
-        inflation_radius: 0.25 #0.5
->>>>>>> 4b3457535d368d7262264c90cb4410cd76e78e8c
+        cost_scaling_factor: 2.0 #0.75 #3.0       # exponential decay factor across inflation radius; the higher the value, the more aggressive the decay
+        inflation_radius: 0.5 #0.25 #0.5          # radius to inflate costmap around lethal obstacles.
       voxel_layer:
         plugin: "nav2_costmap_2d::VoxelLayer"
         enabled: True
@@ -170,13 +166,8 @@ global_costmap:
           obstacle_min_range: 0.0
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-<<<<<<< HEAD
-        cost_scaling_factor: 1.0 #0.0000000000000000000001
-        inflation_radius: 0.25   #0.3
-=======
-        cost_scaling_factor: 1.0 #0.3
-        inflation_radius: 0.25 #0.5
->>>>>>> 4b3457535d368d7262264c90cb4410cd76e78e8c
+        cost_scaling_factor: 2.0 #0.75 #0.3
+        inflation_radius: 0.5 #0.1
       always_send_full_costmap: True
   global_costmap_client:
     ros__parameters:
@@ -195,8 +186,8 @@ planner_server:
       tolerance: 0.5                    # tolerance for planning if unable to reach exact pose, in meters, for 2D node
       downsample_costmap: false         # whether or not to downsample the map
       downsampling_factor: 1            # multiplier for the resolution of the costmap layer (e.g. 2 on a 5cm costmap would be 10cm)
-      allow_unknown: true              # allow traveling in unknown space
-      max_iterations: 100              # maximum total iterations to search for before failing
+      allow_unknown: true               # allow traveling in unknown space
+      max_iterations: 100               # maximum total iterations to search for before failing
       max_on_approach_iterations: 1000  # maximum number of iterations to attempt to reach goal once in tolerance, 2D only
       max_planning_time: 2.0            # max time in s for planner to plan, smooth, and upsample. Will scale maximum smoothing and upsampling times based on remaining time after planning.
       smooth_path: false                # Whether to smooth searched path
@@ -206,7 +197,7 @@ planner_server:
       reverse_penalty: 1.0              # For Reeds-Shepp model: penalty to apply if motion is reversing, must be => 1
       change_penalty: 0.20              # For SE2 node: penalty to apply if motion is changing directions, must be >= 0
       non_straight_penalty: 1.          # For SE2 node: penalty to apply if motion is non-straight, must be => 1
-      cost_penalty: 5.3                 # For SE2 node: penalty to apply to higher cost zones
+      cost_penalty: 0.1 #5.3                 # For SE2 node: penalty to apply to higher cost zones
 
       smoother:
         smoother:
@@ -214,7 +205,7 @@ planner_server:
           w_dist: 0.0                   # weight to bind path to original as optional replacement for cost weight
           w_smooth: 30000.0             # weight to maximize smoothness of path
           w_cost: 0.025                 # weight to steer robot away from collision and cost
-          cost_scaling_factor: 0.0001     # this should match the inflation layer's parameter
+          cost_scaling_factor: 2.0 #0.0001   # this should match the inflation layer's parameter
         optimizer:
           max_time: 0.10                # maximum compute time for smoother
           max_iterations: 500           # max iterations of smoother
