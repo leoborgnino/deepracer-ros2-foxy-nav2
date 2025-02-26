@@ -117,19 +117,13 @@ class BasicNavigator(Node):
         if not self.goal_handle.accepted:
             self.error('Goal to ' + str(pose.pose.position.x) + ' ' +
                        str(pose.pose.position.y) + ' was rejected!')
-            return False
+            
+            # Retorna objeto nulo si no se pudo generar el path
+            return None
 
-        self.result_future = self.goal_handle.get_result_async()
+        # Retorna el goal handle si se pudo generar el path
+        return self.goal_handle
 
-        rclpy.spin_until_future_complete(self, self.result_future)
-
-        status = self.result_future.result().status
-        if status == 4:  # STATUS_SUCCEEDED
-            self.get_logger().info('Objetivo completado.')
-            return True
-        else:
-            self.get_logger().error(f'Error al completar el objetivo. Código: {status}')
-            return False
 
     def followWaypoints(self, poses):
         """Send a `FollowWaypoints` action request."""

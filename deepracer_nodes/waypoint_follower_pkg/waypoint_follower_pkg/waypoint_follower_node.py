@@ -7,6 +7,9 @@ from nav2_msgs.action import NavigateToPose
 from geometry_msgs.msg import PoseStamped
 from std_msgs.msg import Header
 
+import os
+import csv
+
 class WaypointFollowerNode(Node):
     def __init__(self):
         super().__init__('waypoint_follower_node')
@@ -15,9 +18,8 @@ class WaypointFollowerNode(Node):
         self.navigator = BasicNavigator()
 
         # Path to follow
-        self.waypoints_to_follow = [[0.05, 1.97],
-                                    [-3.35, 2.04],
-                                    [-3.20, 5.90]]
+        data_path = os.path.join('','cmd_vel_commands')
+        self.file = open(data_path, 'w', newline='')
 
         # Setting up initial pose
         self.initial_pose = PoseStamped()
@@ -83,14 +85,34 @@ class WaypointFollowerNode(Node):
         for i, pose in enumerate(waypoints):
             self.get_logger().info(f'Enviando waypoint {i+1} de {len(waypoints)}')
             success = self.navigator.goToPose(pose)
-            if not success:
-                self.get_logger().error('Deteniendo la secuencia debido a un fallo.')
+            if success is None:
+                self.get_logger().error('Deteniendo la secuencia debido a un fallo en generación del path.')
                 break
-            time.sleep(2.0)  # Esperar antes de enviar el siguiente waypoint
+
+            result_future = self.navigator.goal_handle.get_result_async()
+
+            # Procesar manualmente los eventos para que se ejecuten los callbacks
+            while not result_future.done():
+                self.get_logger().info('Esperando a que se complete el objetivo...')
+                rclpy.spin_once(self.navigator, timeout_sec=0.1)
+
+            # Evaluar el resultado del futuro después de completarse
+            try:
+                result = result_future.result()
+                if result.status == 4:
+                    self.get_logger().info(f'Waypoint {i + 1} completado con éxito.')
+                else:
+                    self.get_logger().error(f'Fallo al completar el waypoint {i + 1}. Estado: {result.status}')
+                    break
+            except Exception as e:
+                self.get_logger().error(f'Excepción al obtener el resultado del objetivo: {e}')
+                break
+
+            time.sleep(2.0)  # Pausa opcional entre waypoints
 
         self.get_logger().info('Secuencia de waypoints completada.')
 
-        
+
 def main(args=None):
     rclpy.init(args=args)
     waypoint_follower = WaypointFollowerNode()
@@ -106,8 +128,3 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
-
-
-
-
-
