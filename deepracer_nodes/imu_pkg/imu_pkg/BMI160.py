@@ -156,7 +156,14 @@ class IMU_BMI160(BMI160_CONSTANTS):
     b &= mask
     return b;
 
+  
   def reg_write_bits( self, reg, data, pos, len):
+    """Writes the desire register of the BMI160
+     Args:
+         - reg: register to write
+         - data: data to write in the register
+         - pos: initial position of the data to be written (LSB)
+         - len: amount of bits of the reg. to be written counting from the initial pos."""
     b = self.bus.read_byte_data(self.BMI160_DEVICE_ADDRESS, reg)
     mask = ((1 << len) - 1) << pos
     data <<= pos; # shift data into correct position

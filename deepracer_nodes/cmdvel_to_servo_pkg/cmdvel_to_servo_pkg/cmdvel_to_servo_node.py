@@ -42,8 +42,13 @@ from std_msgs.msg import String
 from deepracer_interfaces_pkg.srv import SetMaxSpeedSrv
 from cmdvel_to_servo_pkg import constants
 from nav_msgs.msg import Odometry
+from sensor_msgs.msg import Imu
 import math
 import threading
+
+import csv
+import os
+import time
 
 
 class CmdvelToServoNode(Node):
@@ -57,94 +62,113 @@ class CmdvelToServoNode(Node):
         super().__init__('cmdvel_to_servo_node')
         self.get_logger().info("cmdvel_to_servo_node started.")
 
-        # Create subscription to cmd_vel.
+        # Cmd_vel topic subscriber
         self.cmdvel_subscriber = \
             self.create_subscription(geometry_msgs.msg.Twist,
                                      constants.CMDVEL_TOPIC,
                                      self.on_cmd_vel,
                                      qos_profile)
         
-        # Create subscription to zero_motion topic
-        self.zero_motion_subscriber = self.create_subscription(Odometry,
-                                                               constants.ODOM_MSG_TOPIC,
-                                                               self.zeromotion_cb,
-                                                               qos_profile)
 
-        # Creating publisher to publish action (angle and throttle).
-        #self.action_msg_pub_cb_grp = ReentrantCallbackGroup()
+        # Action publisher (angle and throttle).
         self.action_publisher = self.create_publisher(ServoCtrlMsg,
                                                       constants.ACTION_PUBLISH_TOPIC,
                                                       qos_profile)
-                                                      #callback_group=self.action_msg_pub_cb_grp)
         
-        # Debug publisher to publish nav2 incoming data
-        #self.debug_msg_pub_cb_grp = ReentrantCallbackGroup()
-        #self.debug_publisher = self.create_publisher(String,
-        #                                             constants.DEBUG_TOPIC,
-        #                                             qos_profile,
-        #                                             callback_group=self.action_msg_pub_cb_grp)
 
         # Service to dynamically set MAX_SPEED_PCT.
         self.set_max_speed_service = self.create_service(SetMaxSpeedSrv,
                                                          constants.SET_MAX_SPEED_SERVICE_NAME,
                                                          self.set_max_speed_cb)
 
-        # Service client to request motion state of DR for the first time
-        get_motion_state_cb_group = ReentrantCallbackGroup()
-        self.get_motion_state_client = self.create_client(Trigger,
-                                                           constants.GET_MOTION_STATE_CLIENT_NAME,
-                                                          callback_group=get_motion_state_cb_group)
-        while not self.get_motion_state_client.wait_for_service(timeout_sec=1.0):
-            self.get_logger().info('get_motion_state_service not available, waiting again...')
-        self.get_motion_state_req = Trigger.Request()
 
-        # Linear velocity in X received on command (m/s) -- Nav2.
+        # Flag to activate/deactivate IMU use
+        # 0: imu deactivated
+        # 1: imu activated
+        self._imu_in_use_flag = 1
+        
+       
+        if(self._imu_in_use_flag == 1):
+            
+            # Zero_motion topic subscriber (no motion data)
+            self.zero_motion_subscriber = self.create_subscription(Odometry,
+                                                               constants.ODOM_MSG_TOPIC,
+                                                               self.zeromotion_cb,
+                                                               qos_profile)
+
+            # Imu topic subscriber (accelerometer and gyroscope data)
+            self.imu_accel_subscriber = self.create_subscription(Imu,
+                                                            constants.IMU_MSG_TOPIC,
+                                                            self.imu_accel_cb,
+                                                            qos_profile)
+            
+            # Service_client to request motion state of DR for the first time
+            get_motion_state_cb_group = ReentrantCallbackGroup()
+            self.get_motion_state_client = self.create_client(Trigger,
+                                                          constants.GET_MOTION_STATE_CLIENT_NAME,
+                                                          callback_group=get_motion_state_cb_group)
+            
+            while not self.get_motion_state_client.wait_for_service(timeout_sec=1.0):
+                self.get_logger().info('get_motion_state_service not available, waiting again...')
+            self.get_motion_state_req = Trigger.Request()
+
+            # Zero Motion handler
+            self.zero_motion_status = 0   # zero motion status recieved from IMU
+            self._first_MO = True         # flag for first zero motion request
+            self.no_motion_state = 0      # DR current motion status: 0 - DR is moving; 1 - DR is not moving 
+            self.stop_counter = 0         # counter to stop the car with stop sequence
+
+            # Imu acceleration data
+            self.imu_accel_x = 0
+            self.imu_accel_y = 0
+            self.imu_accel_z = 0
+        
+            # Timer to check motion state of the robot
+            self.motion_state_timer = self.create_timer(0.01, self.check_motion_state)
+            self.have_sent_last = False
+    
+
+        
+        # Nav2 commands    
+        # Linear velocity in X received on command (m/s)
         self.target_linear = 0.0
-        # Angular velocity in Z received on command (rad/s) -- Nav2.
+        # Angular velocity in Z received on command (rad/s) 
         self.target_rot = 0.0
-        # Target velocity and streering to publish
+        
+        # Target throttle and streering calculated based on Nav2 command.
         self.target_steer_n2 = 0.0
         self.target_speed_n2 = 0.0
+       
+        # Last throttle value sent to servo. 
+        self.target_throttle_ant = 0
+        
         # Max speed pct for throttle output to be rescaled with respect to.
         self.max_speed_pct = constants.MAX_SPEED_PCT
         
-        # Zero Motion status
-        self.zero_motion_status = 0   # data recieved from imu
-        self.first_MO = True          # flag for service request
-        self.motion_state = 0         # DR movement status 
-        self.zm_target_speed = 0      # adjusted speed according to the 'no motion' status 
-        self.n = 1                    # regulates the increment in the target speed for the engines until the vehicule moves
+        self.file_path = os.path.join('/home/deepracer/deepracer_nav2_ws/deepracer_files/navigation_files/', 'navigation_data_test2.csv')
+        self._write_file = False
 
-        # Timer to check motion state
-        #motion_state_timer = threading.Timer(0.1, self.check_motion_state)
-        #motion_state_timer.start() # start timer 
-        self.motion_state_timer = self.create_timer(0.01, self.check_motion_state)
-        
-        ### Added for start
-        #self.peak_cnt = 0
-        #self.max_time_peak = 0
         
         self.lock = threading.Lock()
 
-    #def send_request(self):
-        #self.get_motion_state_req.data = data
-        #self.future = self.get_motion_state_client.call_async(self.get_motion_state_req)
-        #rclpy.spin_until_future_complete(self, self.future)
-        #self.get_logger().info(f"Service response: {self.future.result()}")
-        #return self.future.result()
-
+   
     def send_request(self):
+        """Send request for get_motion_state_client"""
         self.future = self.get_motion_state_client.call_async(self.get_motion_state_req)
-        self.future.add_done_callback(self.handle_response)  # Add callback to handle response
+        self.future.add_done_callback(self.handle_response_cb)  # Add callback to handle response
 
-    def handle_response(self, future):
+    def handle_response_cb(self, future):
+        """Callback for managing the response of the service get_motion_state_service
+        Args: 
+            future: get_motion_state_service response
+        """
         try:
             response = future.result()
-            self.get_logger().info(f"Service response: {response}")
+            #self.get_logger().info(f"Service response: {response}")
             if response.success:
-                self.first_MO = False
+                self._first_MO = False
                 self.setInitialMotionState(response.success)
-                self.get_logger().info(f'Initial no motion state: {response.success}')
+                #self.get_logger().info(f'Initial no motion state: {response.success}')
         except Exception as e:
             self.get_logger().error(f"Service call failed: {e}")
         
@@ -184,7 +208,7 @@ class CmdvelToServoNode(Node):
         if categorized_throttle == 0.0 or max_speed_pct == 0.0:
             return 0.0
 
-        # get the parameter value to calculate the coefficients a, b in the equation y=ax^2+bx
+        # Get the parameter value to calculate the coefficients a, b in the equation y=ax^2+bx
         # The lower the update_speed_scale_value parameter, higher the impact on the
         # final mapped_speed.
         # Hence the update_speed_scale_value parameter is inversely associated with max_speed_pct
@@ -212,7 +236,7 @@ class CmdvelToServoNode(Node):
             update_speed_scale_value = abs(update_speed_scale_value)
         speed_mapping_coefficients = dict()
 
-        # recreate the mapping coefficients for the non-linear equation ax^2 + bx based on
+        # Recreate the mapping coefficients for the non-linear equation ax^2 + bx based on
         # the update_speed_scale_value.
         # These coefficents map the [update_speed_scale_value, update_speed_scale_value/2]
         # values to DEFAULT_SPEED_SCALE values [1.0, 0.8].
@@ -226,54 +250,88 @@ class CmdvelToServoNode(Node):
             (speed_mapping_coefficients["a"] * abs(categorized_throttle)**2 +
              speed_mapping_coefficients["b"] * abs(categorized_throttle))
 
+    def imu_accel_cb(self, msg):
+        """Callback for IMU acceletarion data
+        Args:
+            msg: 3 dimensional acceletarion
+        """
+        self.imu_accel_x = msg.linear_acceleration.x
+        self.imu_accel_y = msg.linear_acceleration.y
+        self.imu_accel_z = msg.linear_acceleration.z
+
     def zeromotion_cb(self, msg):
         """Callback on receiving zero motion update from IMU node
         Args:
            msg (Odometry): Odometry message"""
         self.zero_motion_status = msg.pose.covariance[0]
-        self.motion_state = self.zero_motion_status
-        self.get_logger().info('Updated motion state ZM: {:+.1f}'.format(self.motion_state))
+        self.no_motion_state  = self.zero_motion_status
+        
 
     def check_motion_state(self):
+        """Timer callback. Corrects the speed being published on the servo topic according to
+        the state of motion of the robot
+        """
 
-        if(self.first_MO):
+        # Sends request to get motion state of the robot for the first time
+        if(self._first_MO):
            self.send_request()
            return
 
-        target_throttle = self.target_speed_n2
-        target_angle = self.target_steer_n2
+        ## STOP
+        # If the robot is moving and a speed command under 0.3 was calculated then a stop sequence will be executed
+        # Value 0.3 is used as threshold to prevent collision cause by the innertia carried by the vehicle
+        if(self.no_motion_state == 0 and (abs(self.target_speed_n2) <= 0.3)):
+            if(self.target_throttle_ant!=0):
+                if(self.stop_counter<10):
+                    if(self.target_throttle_ant>0):
+                        self.action_publish(0.0, -0.75)
+                        self.get_logger().info("DECELERATION P - Throttle to send: %f"%-0.75)
+                        self.stop_counter += 1
+                        return
+                    else:
+                        self.action_publish(0.0, 0.75)
+                        self.get_logger().info("DECELERATION N - Throttle to send: %f"%0.75)
+                        self.stop_counter += 1
+                        return  
 
-        #self.get_logger().info('Updated motion state CMS: {:+.1f}'.format(self.motion_state))
+                self.stop_counter = 0
+                self.target_throttle_ant = 0.0
 
-        # Checks if the robot is not moving even though a not-zero speed value was sent to the motor
-        # if this condition is true, then update the speed value to be published
-        if(self.motion_state and target_throttle > 0.4):
+            self.get_logger().info("DECELERATION FINAL - Throttle to send: %f"%0.0)
+            self.action_publish(0.0, 0.0)
+            self.target_throttle_ant = 0.0
+            return
 
-            #self.get_logger().info('Regular motion state updates, CMS: {:+.1f}'.format(self.motion_state))
-            #self.get_logger().info(f"Current time in seconds: {self.get_clock().now().to_msg().sec}")
-            
-            #self.get_logger().info('-------------------------------------------------------------------')
-            #self.get_logger().info('TS before checking ZM status:{:+.3f}'.format(self.target_speed_n2))
+        ## START
+        # If the robot is not moving and a speed command greater than 0.3 has been sent, an initial peak
+        # to start the motor is sent once.
+        # have_sent_last is used as a flag to indicate the initial peak has been sent
+        if(self.have_sent_last == False and self.no_motion_state == 1 and self.target_speed_n2 > 0.30):
+            tbs = 1.0 * math.copysign(1.0, self.target_speed_n2)
+            self.action_publish(self.target_steer_n2, 1.0 * math.copysign(1.0, self.target_speed_n2))
+            self.get_logger().info("PEAK - Throttle to send: %f"%tbs)
+            self.have_sent_last = True
+            self.target_throttle_ant = 1.0 * math.copysign(1.0, self.target_speed_n2)
 
-            if(abs(target_throttle+0.05*(self.n+1)) <= 1):
-                
-                self.n = self.n + 1
-
-            target_throttle = target_throttle+0.05*self.n    
-            self.action_publish(target_angle, target_throttle)
-                
-
-            #self.get_logger().info('TS after checking ZM status:{:+.3f}'.format(target_throttle))
-            #self.get_logger().info('-------------------------------------------------------------------')
-            
-        else:
-            self.n = 1
-            self.action_publish(target_angle, target_throttle)
+        ## NORMAL NAVIGATION
+        # If the start peak has already been published, the robot is moving and the calculated current speed is
+        # above the threshold, cruising speed is published
+        if(self.have_sent_last == True and self.no_motion_state == 0):
+            tbs = 0.75 * math.copysign(1.0, self.target_speed_n2)
+            self.action_publish(self.target_steer_n2, 0.75 * math.copysign(1.0, self.target_speed_n2))
+            self.get_logger().info("AFTER PEAK - Throttle to send: %f"%tbs)
+            self.have_sent_last = False
+            self.target_throttle_ant = 0.75 * math.copysign(1.0, self.target_speed_n2)
         
 
     def setInitialMotionState(self, initial_mo_state):
-        self.motion_state = initial_mo_state
-        self.get_logger().info(f'Initial no motion state: {initial_mo_state}')
+        """Sets initial motion state of the robot
+        Args:
+            initial_mo_state: First motion state of the robot after power on
+        """
+        self.no_motion_state  = initial_mo_state
+        self.get_logger().info(f'Set initial no motion state: {initial_mo_state}')
+
         
     def on_cmd_vel(self, msg):
         """Callback on receiving a velocity update from ROS2 Nav stack.
@@ -283,26 +341,24 @@ class CmdvelToServoNode(Node):
         try:
             # Linear position recieved from nav
             self.target_linear = msg.linear.x
-            #msg = String()
-            #msg.data = 'Nav2 target linear: %d' % self.target_linear
-            #self.debug_publisher.publish(msg)
             # Angular position recieved from nav
             self.target_rot = msg.angular.z
 
-            # Nav2 messege
-            self.get_logger().info('Nav2 mssg')
-            #self.get_logger().info('target rot: {:+.2f}'.format(self.target_rot))
-            self.get_logger().info('target linear: {:+.2f}'.format(self.target_linear))
-
-            # Pwm action "calculated"
+            # PWM action "calculated"
             self.target_steer_n2, self.target_speed_n2 = self.plan_action()
 
-            #self.get_logger().info('PWM action')
-            #self.get_logger().info('PWM target steer n2: {:+.2f}'.format(self.target_steer_n2))
-            #self.get_logger().info('PWM target speed n2: {:+.2f}'.format(self.target_speed_n2))
+            throttle_to_send = 0.0
+            # Throttle/speed to be published is corrected according to the absolute value of the calculated speed
+            # and the direction of the movement.
+            # If the calculated speed is above 0.3 the actual published speed is going to be the minimum speed needed
+            # for a smooth navigation.
+            if(abs(self.target_speed_n2) > 0.3):
+                throttle_to_send = 0.75 * math.copysign(1.0, self.target_speed_n2)  
+                self.target_throttle_ant = throttle_to_send
 
-            self.action_publish(self.target_steer_n2, self.target_speed_n2)
-            
+            self.get_logger().info("ONCMD - Throttle to send: %f"%throttle_to_send)
+            self.action_publish(self.target_steer_n2, throttle_to_send)
+
         except Exception as ex:
             self.get_logger().error(f"Failed to publish action: {ex}")
             self.action_publish(constants.ActionValues.DEFAULT_OUTPUT, constants.ActionValues.DEFAULT_OUTPUT)
@@ -351,32 +407,26 @@ class CmdvelToServoNode(Node):
             steering (float): Angle value to be published to servo.
             throttle (float): Throttle value to be published to servo.
         """
-        
+
+        # THROTTLE
+        #----------
         # Clamping the linear velocity between MAX_SPEED and MIN_SPEED supported by DeepRacer.
-        self.get_logger().info("Target Linear: %f"%self.target_linear)
         target_linear_clamped = max(min(self.target_linear, constants.VehicleNav2Dynamics.MAX_SPEED),
                                             constants.VehicleNav2Dynamics.MIN_SPEED)
-        self.get_logger().info("Target Linear Clamped: %f"%target_linear_clamped)
         
         # Get the throttle values mapped wrt DeepRacer servo.
         target_throttle_mapped = self.get_mapped_throttle(target_linear_clamped)
-        self.get_logger().info("Target Throttle Clamped: %f"%target_throttle_mapped)
         
         # Set the direction.
-        target_throttle_signed = target_linear_clamped# * math.copysign(1.0, self.target_linear)
-        self.get_logger().info("Target Throttle Signed: %f"%target_throttle_signed)
+        target_throttle_signed = target_linear_clamped 
 
         throttle = self.get_rescaled_manual_speed(target_throttle_signed, self.max_speed_pct)
         
-        # Get rescaled throttle.
-        #if ( self.peak_cnt >= self.max_time_peak ):
-        #    throttle = self.get_rescaled_manual_speed(target_throttle_signed, self.max_speed_pct)
-        #else:
-        #    throttle = math.copysign(1.0, self.target_linear)
-        #    self.peak_cnt += 1
-
-        self.get_logger().info("Throttle to send: %f"%throttle)
+        #self.get_logger().info("NAV2 - Throttle to send: %f"%throttle)
         
+        
+        # ROTATION
+        #----------
         # Clamping the rotation between MAX_STEER and MIN_STEER supported by DeepRacer.
         target_rot_clamped = max(min(self.target_rot, constants.VehicleNav2Dynamics.MAX_STEER),
                                         constants.VehicleNav2Dynamics.MIN_STEER)
@@ -387,9 +437,7 @@ class CmdvelToServoNode(Node):
         # Set the direction.
         steering = target_rot_clamped * math.copysign(1.0, self.target_linear)
 
-        #if (self.target_linear == 0):
-            #self.peak_cnt = 0
-
+                
         return steering, throttle
 
     def action_publish(self, target_steer, target_speed):
@@ -401,7 +449,14 @@ class CmdvelToServoNode(Node):
         """
         result = ServoCtrlMsg()
         result.angle, result.throttle = target_steer, target_speed
-        #self.get_logger().info(f"Publishing to servo: Steering {target_steer} | Throttle {target_speed}")
+
+        timestamp = self.get_clock().now().to_msg()
+        if(self._write_file):
+            with open(self.file_path, mode='a', newline='') as file:
+                writer = csv.writer(file)
+                if file.tell() == 0:
+                    writer.writerow(['time', 'no_motion' , 'nav2_linear', 'nav2_throttle', 'throttle_sent'])
+                writer.writerow([timestamp, self.no_motion_state, self.target_linear, self.target_speed_n2, target_speed])
         
         self.action_publisher.publish(result)
 
@@ -413,8 +468,6 @@ def main(args=None):
                      history=QoSHistoryPolicy.RMW_QOS_POLICY_HISTORY_KEEP_LAST)
     cmdvel_to_servo_node = CmdvelToServoNode(qos)
     executor = MultiThreadedExecutor()
-    #motion_state = cmdvel_to_servo_node.send_request()
-    #cmdvel_to_servo.setInitialMotionState(motion_state)
     rclpy.spin(cmdvel_to_servo_node, executor)
 
     # Destroy the node explicitly

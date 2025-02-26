@@ -25,18 +25,20 @@ class WaypointFollowerNode(Node):
         self.initial_pose = PoseStamped()
         self.initial_pose.header.frame_id = 'map'
         self.initial_pose.header.stamp = self.navigator.get_clock().now().to_msg()
-        self.initial_pose.pose.position.x = 0.0
-        self.initial_pose.pose.position.y = 0.0
+        self.initial_pose.pose.position.x = 0.005
+        self.initial_pose.pose.position.y = 0.102
         self.initial_pose.pose.orientation.z = 0.0
-        self.initial_pose.pose.orientation.w = 1.0
+        self.initial_pose.pose.orientation.w = 0.028 #1.0
         self.navigator.setInitialPose(self.initial_pose)
+
+        time.sleep(3.0)
 
         self.get_logger().info('Starting Waypoint Follower Node')
 
 
     def create_pose_stamped(self, x, y, theta, frame_id='map', timestamp=None):
         """
-        Crea un mensaje PoseStamped válido con las coordenadas x, y y la orientación theta.
+        Crea un mensaje PoseStamped válido con las coordenadas 'x', 'y' y la orientación theta.
 
     Args:
         x (float): Coordenada X.
@@ -71,46 +73,44 @@ class WaypointFollowerNode(Node):
     def follow_waypoints(self):
         """Executes navigation using a list of waypoints"""
 
-        # Waits until Nav2Stack is fully initialized
+       # Waits until Nav2Stack is fully initialized
         self.navigator.waitUntilNav2Active()
 
         # Sends waypoint to nav2 stack
         self.get_logger().info("Navigating through waypoints...")
-        #self.navigator.followWaypoints(self.waypoints_to_follow)
 
         # Lista de poses objetivo
-        waypoints = [self.create_pose_stamped(2.0,0.0,0.0),self.create_pose_stamped(2.0,-3.0,0.0),self.create_pose_stamped(4.0,-3.0,0.0)]
+        waypoints = [self.create_pose_stamped(0.784,0.186,0.045),self.create_pose_stamped(1.404,1.175,1.483)] #,self.create_pose_stamped(2.667,0.005,0.0)]
 
         # Iterar sobre las poses y enviarlas secuencialmente
         for i, pose in enumerate(waypoints):
-            self.get_logger().info(f'Enviando waypoint {i+1} de {len(waypoints)}')
+            self.get_logger().info(f'Sending waypoint {i+1} de {len(waypoints)}')
             success = self.navigator.goToPose(pose)
             if success is None:
-                self.get_logger().error('Deteniendo la secuencia debido a un fallo en generación del path.')
+                self.get_logger().error('Stoping process. Path generation has failed')
                 break
 
             result_future = self.navigator.goal_handle.get_result_async()
 
-            # Procesar manualmente los eventos para que se ejecuten los callbacks
+            # Bucle para procesar otros eventos mientras se espera que se complete el objetivo de navegación 
             while not result_future.done():
-                self.get_logger().info('Esperando a que se complete el objetivo...')
+                self.get_logger().info('Waiting until navigation goal is completed...')
                 rclpy.spin_once(self.navigator, timeout_sec=0.1)
 
-            # Evaluar el resultado del futuro después de completarse
             try:
                 result = result_future.result()
                 if result.status == 4:
-                    self.get_logger().info(f'Waypoint {i + 1} completado con éxito.')
+                    self.get_logger().info(f'Waypoint {i + 1} successfully completed.')
                 else:
-                    self.get_logger().error(f'Fallo al completar el waypoint {i + 1}. Estado: {result.status}')
+                    self.get_logger().error(f'ERROR. Waypoint {i + 1} could not be completed. State: {result.status}')
                     break
             except Exception as e:
-                self.get_logger().error(f'Excepción al obtener el resultado del objetivo: {e}')
+                self.get_logger().error(f'An exception has occured while obtaining navigation result: {e}')
                 break
 
-            time.sleep(2.0)  # Pausa opcional entre waypoints
+            time.sleep(2.0)  # Pause between waypoints
 
-        self.get_logger().info('Secuencia de waypoints completada.')
+        self.get_logger().info('Waypoints sequence completed.')
 
 
 def main(args=None):
@@ -128,3 +128,7 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
+
+
+
+

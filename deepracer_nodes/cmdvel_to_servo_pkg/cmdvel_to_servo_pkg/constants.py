@@ -18,6 +18,7 @@ ACTION_PUBLISH_TOPIC = "servo_msg"
 SET_MAX_SPEED_SERVICE_NAME = "set_max_speed"
 GET_MOTION_STATE_CLIENT_NAME = "/imu_pkg/get_motion_state_service"
 ODOM_MSG_TOPIC = "/imu_pkg/odom_zero"
+IMU_MSG_TOPIC = "/imu_pkg/data_raw"
 CMDVEL_TOPIC = "/cmd_vel"
 DEBUG_TOPIC = "/debug_topic"
 
@@ -65,7 +66,7 @@ class ActionValues():
 # map the speed values. The idea behind this mapping is a lower percentage of maximum speed %
 # should map to a higher speed scale value while calculating the coefficients so that the curve
 # is more flatter and the impact of actual speed values is less for lower max speed %.
-MAX_SPEED_PCT = 0.85
+MAX_SPEED_PCT = 0.8
 
 # Action space mapped to on the vehicle for speed values of 0.8 and 0.4.
 DEFAULT_SPEED_SCALES = [1.0, 0.8]
